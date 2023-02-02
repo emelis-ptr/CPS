@@ -1,4 +1,4 @@
-# retrieve_data.py #
+# api.py #
 url = "https://api.stlouisfed.org/fred/"
 name = 'name'
 categories_label = 'categories'
