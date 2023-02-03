@@ -8,6 +8,7 @@ from src.fred_cps.utils import constants as c
 apiKey = "b933025b5b47791c3552c8ce24305e99"
 key_ob = "PHMEPRPIHCSA"
 key_cat = 2
+key_ser = "33967"
 
 
 class ApiTestCase(unittest.TestCase):
@@ -32,9 +33,9 @@ class ApiTestCase(unittest.TestCase):
 
     def test_select_series(self):
         api = ApiFred(apiKey)
-        api.get_series(key_cat)
+        api.get_series(key_ser)
 
-        series_db = api.db.select_series(key_cat)
+        series_db = api.db.select_series_category(key_ser)
 
         self.assertTrue(len(series_db) > 0, "I valori di osservazioni nel database non sono stati "
                                             "inseriti tutti")

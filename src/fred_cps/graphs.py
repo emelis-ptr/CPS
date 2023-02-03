@@ -10,6 +10,27 @@ from sklearn import linear_model
 import src.fred_cps.utils.constants as c
 
 
+# Classe contenenti funzioni che permettono di creare dei grafici
+def _define_date_axis():
+    """Metodo che calcola la distanza tra una data e un'altra """
+    # frequency date in x-axis
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    year = mdates.YearLocator(10)
+    ax.xaxis.set_major_locator(year)
+    fig.autofmt_xdate(rotation=45)
+
+
+def _formatter_date_in_axis(dataframe):
+    """ Metodo che trasforma una formato stringa in data
+    :param dataframe: key-value: date-value
+    :return: valore in formato date """
+    # formatter dates
+    date_formatter = [dt.datetime.strptime(d, c.format_date).date() for d in dataframe[c.date_label]]
+    # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    return date_formatter
+
+
 class Graph:
 
     def __init__(self, series_key, data_dict):
@@ -18,20 +39,17 @@ class Graph:
         self.model = Model(data_dict)
 
     def media_mobile(self, parameter_days, interpolation_bool):
-        """ Media mobile: linear, weighted and exponential
-        :param interpolation_bool: true if linear interpolation is desired
-        :param parameter_days: parameters n day for media mobile
-        """
-        if interpolation_bool:
-            df_observations = self.model.linear_interpolation()
-        else:
-            df_observations = self.model.get_observations()
+        """Metodo che permette di creare un grafico sulla media mobile.
+        Media mobile: linear, weighted and exponential
+        :param interpolation_bool: vero se si vuole effettuare un'interpolazione; altrimenti
+        :param parameter_days: parametro n giorni """
+        df_observations = self._if_interpolation(interpolation_bool)
 
         if not isinstance(self.data_dict, pd.DataFrame):
             df_observations = self.model.get_observations()
 
-        list_date = self._formatter_date_in_axis(df_observations)
-        self._define_date_axis()
+        list_date = _formatter_date_in_axis(df_observations)
+        _define_date_axis()
         self._pplot(df_observations, list_date)
 
         weights = np.arange(1, parameter_days + 1)
@@ -48,9 +66,9 @@ class Graph:
         plt.show()
 
     def covariance(self, series_id, dataframe):
-        """ calculate covariance
-        :param dataframe:
-        :param series_id:
+        """ Metodo che permette di creare un grafico sulla covarianza
+        :param dataframe: records delle osservabili
+        :param series_id: lista id della serie
         """
         if not isinstance(dataframe, pd.DataFrame):
             dataframe = self.model.get_observations()
@@ -58,50 +76,42 @@ class Graph:
         else:
             dataframe[series_id] = dataframe[series_id].astype('float')
 
-        covariance_matrix = pd.DataFrame.cov(dataframe)
-        plt.figure(figsize=(20, 5))
-        sns.heatmap(covariance_matrix, annot=True, fmt='g', xticklabels=series_id, yticklabels=series_id)
-        plt.title("Covariance")
-        plt.savefig("graph/" + "covariance" + "-" + str(series_id) + ".png")
-        plt.show()
+        if len(series_id) > 1:
+            covariance_matrix = pd.DataFrame.cov(dataframe)
+            plt.figure(figsize=(20, 5))
+            sns.heatmap(covariance_matrix, annot=True, fmt='g', xticklabels=series_id, yticklabels=series_id)
+            plt.title("Covariance")
+            plt.savefig("graph/" + "covariance" + "-" + str(series_id) + ".png")
+            plt.show()
 
     def difference_plot(self, interpolation_bool):
-        """ calculate difference
-        :param interpolation_bool:
-        """
-        if interpolation_bool:
-            dataframe = self.model.linear_interpolation()
-        else:
-            dataframe = self.model.get_observations()
+        """Metodo che permette di creare un grafico sulle differenze prime
+        :param interpolation_bool: vero se si vuole effettuare un'interpolazione; altrimenti """
+        dataframe = self._if_interpolation(interpolation_bool)
 
         if not isinstance(dataframe, pd.DataFrame):
             dataframe = self.model.get_observations()
-        list_date = self._formatter_date_in_axis(dataframe)
+        list_date = _formatter_date_in_axis(dataframe)
         dataframe['value'] = dataframe['value'].astype('float')
         dataframe['difference'] = dataframe['value'].diff()
         plt.plot(list_date, dataframe['difference'], "-", linewidth=1, label='Observations - ' + self.series_key)
 
     def percentage_plot(self, interpolation_bool):
-        """ calculate percentage difference
-        :param interpolation_bool:
-        """
-        if interpolation_bool:
-            dataframe = self.model.linear_interpolation()
-        else:
-            dataframe = self.model.get_observations()
+        """Metodo che permette di creare un grafico sulla differenza percentuale
+        :param interpolation_bool: vero se si vuole effettuare un'interpolazione; altrimenti """
+        dataframe = self._if_interpolation(interpolation_bool)
 
         if not isinstance(dataframe, pd.DataFrame):
             dataframe = self.model.get_observations()
-        list_date = self._formatter_date_in_axis(dataframe)
+        list_date = _formatter_date_in_axis(dataframe)
         dataframe['value'] = dataframe['value'].astype('float')
         dataframe['percentage'] = dataframe['value'].pct_change()
         plt.plot(list_date, dataframe['percentage'], "-", linewidth=1, label='Observations - ' + self.series_key)
 
     def linear_regression(self, dataframe):
-        """ calculate linear regression
-        :param dataframe: key-value: date-value
-        """
-        list_date = self._formatter_date_in_axis(dataframe)
+        """Metodo che permette di creare un grafico sulla regressione lineare
+        :param dataframe: key-value: date-value """
+        list_date = _formatter_date_in_axis(dataframe)
         dataframe['days_from_start'] = (dataframe.index - dataframe.index[0])
 
         x = dataframe['days_from_start'].values.reshape(-1, 1)
@@ -122,38 +132,23 @@ class Graph:
         plt.show()
 
     def plot_observations(self, interpolation_bool):
-        """ Plot of an observation
-        :param interpolation_bool: true if linear interpolation is desired
-        """
-        if interpolation_bool:
-            df_observations = self.model.linear_interpolation()
-        else:
-            df_observations = self.model.get_observations()
+        """Metodo che permette di creare un grafico sulle osservabili di una serie
+        :param interpolation_bool: vero se si vuole effettuare un'interpolazione; altrimenti """
+        df_observations = self._if_interpolation(interpolation_bool)
 
         if not isinstance(self.data_dict, pd.DataFrame):
             df_observations = self.model.get_observations()
         # takes the formatted dates
-        list_date = self._formatter_date_in_axis(df_observations)
-        self._define_date_axis()
+        list_date = _formatter_date_in_axis(df_observations)
+        _define_date_axis()
         self._pplot(df_observations, list_date)
         self.set_plot("Observations", c.observations_label)
         plt.show()
 
-    def _formatter_date_in_axis(self, dataframe):
-        """ format the string to date
-        :param dataframe: key-value: date-value
-        :return:
-        """
-        # formatter dates
-        date_formatter = [dt.datetime.strptime(d, c.format_date).date() for d in dataframe[c.date_label]]
-        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        return date_formatter
-
     def set_plot(self, name_graph, name_png):
-        """ Set layout to plot
-        :param name_graph: name to assign to the plot
-        :param name_png: name of the image
-        """
+        """Metodo che imposta il layout di un plot
+        :param name_graph: nome da assegnare al grafico
+        :param name_png: nome da assegnare al file png """
         # layout plot
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(c.format_date))
         plt.title(name_graph)
@@ -166,18 +161,18 @@ class Graph:
     def _pplot(self, dataframe, list_date):
         """ Plots
         :param dataframe:  key-value: date-value
-        :param list_date: list date formatted
-        """
+        :param list_date: list date formatted """
+        dataframe[c.value_label] = dataframe[c.value_label].astype('float')
         plt.plot(list_date, dataframe[c.value_label], "-", linewidth=1,
                  label=c.observations_label + ' - ' + self.series_key)
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(c.format_date))
 
-    def _define_date_axis(self):
-        """ distance between one date and another
-        """
-        # frequency date in x-axis
-        fig = plt.figure()
-        ax = fig.add_subplot()
-        year = mdates.YearLocator(10)
-        ax.xaxis.set_major_locator(year)
-        fig.autofmt_xdate(rotation=45)
+    def _if_interpolation(self, interpolation_bool):
+        """Metodo che ritorna una lista di osservabili in base se è stata effetuata un'interpolazione o meno
+        :param interpolation_bool: vero se si vuole effettuare un'interpolazione; altrimenti
+        :return: dataframe delle osservabili """
+        if interpolation_bool:
+            df_observations = self.model.linear_interpolation()
+        else:
+            df_observations = self.model.get_observations()
+        return df_observations

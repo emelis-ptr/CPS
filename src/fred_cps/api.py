@@ -2,13 +2,14 @@ import requests
 import json
 import time
 
-from src.fred_cps.utils.json_file import File
+from src.fred_cps.utils.json_file import write_json
 from src.fred_cps.utils import constants as c
 from .database import Database
 
 time_to_sleep = 20
 
 
+# Classe contenenti le funzioni utile per scaricare categorie, serie e osservabili.
 class ApiFred:
 
     def __init__(self, api_key):
@@ -18,9 +19,12 @@ class ApiFred:
         self.series_URL = "https://api.stlouisfed.org/fred/category/series?"
         self.observations_URL = "https://api.stlouisfed.org/fred/series/observations?"
         self.db = Database(c.database_name)
-        self.file = File()
 
     def _get_url(self, tag, value):
+        """Metodo che seleziona url corrispondente se riguarda: categoria, serie o osservabile
+        :param tag: 'categories', 'series', 'observations'
+        :param value: id categoria o id osservabile
+        :return: link url """
         url_link = ""
         if tag == c.categories_label:
             url_link = self.category_URL + "category_id=" + str(value) + "&api_key=" + self.key + "&file_type=json"
@@ -33,10 +37,10 @@ class ApiFred:
         return url_link
 
     def _get_json(self, tag, value):
-        """" get data of single category
-                :param value: 
-                :param tag: 
-                """
+        """" Metodo che ottiene i dati, presi dall'url, in formato json
+                :param value: id categoria o id osservabile
+                :param tag: 'categories', 'series', 'observations'
+                :return: json text """
         url = self._get_url(tag, value)
         conn = requests.get(url)
         json_data = conn.text
@@ -44,23 +48,23 @@ class ApiFred:
 
     # Categories
     def get_categories(self, category_key):
-        """ Get all category from a category id
-        :param category_key: category id
-        :return: dictionary category
-        """
+        """ Metodo che ottiene tutte le categorie a partire da una categoria data
+        :param category_key: categoria id
+        :return: dictionary della categoria """
         category = self._get_json(c.categories_label, category_key)[c.categories_label]
 
         dict_categories = {
             category_key: {c.name: category[0][c.name], c.parent_id_label: category[0][c.parent_id_label],
                            c.children_label: {}, c.series_label: {}}}
         self._recursive_categories(dict_categories)
-        self.file.write_json(category_key, c.categories_label, dict_categories)
+        write_json(category_key, c.categories_label, dict_categories)
         self.db.insert_categories(dict_categories, c.dir_cat_json + str(category_key) + "." + c.type_file)
         return dict_categories
 
     def _recursive_categories(self, dict_categories):
-        """ Get all category from category id
-          """
+        """ Metodo che ottiene in modo ricorsivo tutte le categoria
+        :param dict_categories: dictionary della categoria
+        :exception Exception: """
         for k, v in dict_categories.items():
             if isinstance(v, dict):
                 try:
@@ -75,19 +79,19 @@ class ApiFred:
 
     # Series
     def get_series(self, category_key):
-        """ Get all series from category id
-        :param category_key: category_id
-        :return: dictionary series
-        """
+        """ Metodo che ottiene tutte le serie a partire da una categoria data, solo se ne possiede
+        :param category_key: id categoria
+        :return: dictionary della serie """
         dict_series = self.get_categories(category_key)
         self._recursive_series(dict_series)
-        self.file.write_json(category_key, c.series_label, dict_series)
+        write_json(category_key, c.series_label, dict_series)
         self.db.insert_series(dict_series, c.dir_series_json + str(category_key) + "." + c.type_file)
         return dict_series
 
     def _recursive_series(self, dict_series):
-        """ Get all series from category id
-        """
+        """ Metodo che ottiene in modo ricorsivo tutte le serie
+        :param dict_series: dictionary della serie
+        :exception Exception: """
         # for each category it takes id
         for k, v in dict_series.items():
             if isinstance(v, dict):
@@ -104,10 +108,9 @@ class ApiFred:
 
     # Observations
     def get_observations(self, key):
-        """ Get all observation from key
-        :param key: key
-        :return: dictionary observations
-        """
+        """ Metodo che ottiene tutte le osservabili da una serie
+        :param key: id della serie
+        :return: dictionary delle osservabili """
         dict_observations = {}
         if isinstance(key, int):
             dict_series = self.get_series(key)
@@ -117,15 +120,15 @@ class ApiFred:
             for k, v in dict_observations.items():
                 dict_observations[k] = self._get_observations_no_recursive(k)
         for k in dict_observations.keys():
-            self.file.write_json(k, c.observations_label, dict_observations)
+            write_json(k, c.observations_label, dict_observations)
             self.db.insert_observations(dict_observations, c.dir_obs_json + str(key) + "." + c.type_file)
         return dict_observations
 
     def _recursive_observations(self, dict_series, dict_observations):
-        """ If key is integer then get all observations recursively
-        :param dict_observations: dictionary observations
-        :param dict_series: dictionary of series
-        """
+        """ Metodo che ottiene in modo ricorsivo tutte le osservabili. Se l'id è un intero
+        allora prima cerca tutte le categorie con quell'id e poi le osservabili per ogni categoria
+        :param dict_observations: dictionary delle osservabili
+        :param dict_series: dictionary delle serie """
         # for each category it takes id
         for k, v in dict_series.items():
             if isinstance(v, dict):
@@ -136,9 +139,10 @@ class ApiFred:
             self._recursive_observations(v[c.children_label], dict_observations)
 
     def _get_observations_no_recursive(self, series_key):
-        """ From a series_key get all observations e insert it in a list
-            :param series_key: id series
-            """
+        """ Metodo che da un id della serie ottiene tutte le osservabili e
+         li inserisce in una lista
+            :param series_key: id della serie
+            :return: lista delle osservabili """
         count = 0
         list_observations = []
         for i in self._get_json("observations", series_key)[c.observations_label]:
